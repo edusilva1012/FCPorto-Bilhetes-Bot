@@ -25,7 +25,7 @@ jobs:
           # Aqui o GitHub tira o link do cofre e passa-o ao teu código
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         # Vai procurar um projeto com este nome (vamos usar este nome quando criarmos o código)
-        run: dotnet run --project FCPortoTicketsBot/FCPortoTicketsBot.csproj
+        run: dotnet run
 
       - name: 4. Guardar a Memória
         run: |
