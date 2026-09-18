@@ -13,8 +13,6 @@ namespace FCPortoTicketsBot
     {
         static async Task Main(string[] args)
         {
-            // O GitHub Actions vai injetar o link secret aqui.
-            // Para testares no teu PC, podes colar o teu link do Discord diretamente entre as aspas na linha abaixo.
             string webhookUrl = Environment.GetEnvironmentVariable("DISCORD_WEBHOOK_URL");
             
             if (string.IsNullOrEmpty(webhookUrl))
@@ -27,7 +25,6 @@ namespace FCPortoTicketsBot
             string fileMemory = "ultimo_aviso.txt";
 
             using HttpClient client = new HttpClient();
-            // Disfarça o bot como um browser normal para o site do FC Porto não bloquear o acesso
             client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
             string html;
@@ -44,7 +41,6 @@ namespace FCPortoTicketsBot
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(html);
 
-            // Puxa todos os links da página
             var links = doc.DocumentNode.SelectNodes("//a[@href]");
             
             if (links == null)
@@ -53,36 +49,37 @@ namespace FCPortoTicketsBot
                 return;
             }
 
-            // Procura a primeira notícia que contenha "bilhete" ou "bilhetes"
+            // Procura a palavra, mas ignora especificamente o link direto do menu da bilheteira
             var noticiaBilhetes = links.FirstOrDefault(a => 
                 !string.IsNullOrWhiteSpace(a.InnerText) && 
-                a.InnerText.Contains("bilhete", StringComparison.OrdinalIgnoreCase));
+                a.InnerText.Contains("bilhete", StringComparison.OrdinalIgnoreCase) &&
+                !a.GetAttributeValue("href", "").Contains("bilhetes.fcporto.pt"));
 
             if (noticiaBilhetes != null)
             {
-                // Limpa o texto (tira quebras de linha e espaços extra que o HTML costuma ter)
                 string titulo = noticiaBilhetes.InnerText.Trim();
                 titulo = Regex.Replace(titulo, @"\s+", " ");
-                string safeTitle = titulo.Replace("\"", "\\\""); // Evita que aspas partam o JSON do Discord
+                string safeTitle = titulo.Replace("\"", "\\\""); 
                 
                 string linkParcial = noticiaBilhetes.GetAttributeValue("href", "");
-                // Alguns links no site podem ser relativos (ex: /pt/noticias/...), isto garante o link completo
-                string linkCompleto = linkParcial.StartsWith("http") ? linkParcial : $"https://www.fcporto.pt{linkParcial}";
+                string linkNoticia = linkParcial.StartsWith("http") ? linkParcial : $"https://www.fcporto.pt{linkParcial}";
 
-                // Verifica o que está gravado na memória
+                // O link direto de compra que gostas de ter à mão
+                string linkCompra = "https://bilhetes.fcporto.pt/";
+
                 string ultimoLinkAvisado = "";
                 if (File.Exists(fileMemory))
                 {
                     ultimoLinkAvisado = File.ReadAllText(fileMemory).Trim();
                 }
 
-                // Se for um link novo, envia para o Discord
-                if (linkCompleto != ultimoLinkAvisado)
+                if (linkNoticia != ultimoLinkAvisado)
                 {
                     Console.WriteLine($"Nova notícia encontrada: {titulo}");
                     
+                    // O novo design da mensagem com os dois links separados
                     string jsonPayload = $@"{{
-                        ""content"": ""🚨 **Nova Informação de Bilhetes!** 🚨\n\n**{safeTitle}**\n{linkCompleto}""
+                        ""content"": ""🚨 **ALERTA BILHETES FC PORTO** 🚨\n\n📰 **Detalhes:** {safeTitle}\n🔗 **Ler Notícia:** {linkNoticia}\n🎫 **Comprar Diretamente:** {linkCompra}""
                     }}";
 
                     var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
@@ -91,7 +88,7 @@ namespace FCPortoTicketsBot
                     if (response.IsSuccessStatusCode)
                     {
                         Console.WriteLine("Mensagem enviada com sucesso!");
-                        File.WriteAllText(fileMemory, linkCompleto);
+                        File.WriteAllText(fileMemory, linkNoticia); // Guarda apenas o link da notícia para evitar falsos positivos
                     }
                     else
                     {
